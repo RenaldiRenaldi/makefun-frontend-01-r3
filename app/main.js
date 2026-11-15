@@ -1,31 +1,15 @@
-// A make.fun frontend: the board of open bounties and a page for each, on hash routes.
-//
-//   #/                the board
-//   #/bounty/<slug>   one bounty
-//
-// window.__shotReady is false while a page loads and true once its data is on screen, so a
-// screenshot script knows when to capture.
-
-import { getBounties, getBounty } from './api.js';
-import { board, bounty } from './views.js';
-
-const app = document.getElementById('app');
-
-async function render() {
-  window.__shotReady = false;
-  app.innerHTML = '<p>Loading…</p>';
-  const match = location.hash.match(/^#\/bounty\/([^/]+)/);
-  if (match) {
-    const b = await getBounty(decodeURIComponent(match[1]));
-    document.title = `${b.title} | make.fun bounties`;
-    app.innerHTML = bounty(b);
-  } else {
-    document.title = 'make.fun bounties';
-    app.innerHTML = board(await getBounties());
-  }
-  window.scrollTo(0, 0);
-  window.__shotReady = true;
+import {get} from './api.js';
+import {money} from './format.js';
+import {escape as E,cards,pager,rankTable,ranks,bountyView,profileView} from './views.js';
+const main=document.querySelector('main'),stats=document.querySelector('#stats');
+function patch(a,b){if(a.isEqualNode(b))return;if(a.nodeType===3){a.textContent=b.textContent;return}if(a.nodeName!==b.nodeName){a.replaceWith(b);return}for(const v of b.attributes)a.setAttribute(v.name,v.value);for(let i=0;i<Math.max(a.childNodes.length,b.childNodes.length);i++){const x=a.childNodes[i],y=b.childNodes[i];if(!y){x.remove();i--}else if(!x)a.append(y.cloneNode(true));else patch(x,y)}}
+let sequence=0,refreshView=null,boardState={q:'',sort:'pot',filter:'all',page:0};
+function update(id,html){const node=document.getElementById(id);if(node&&node.innerHTML!==html)node.innerHTML=html}
+function bindPager(node,callback){node.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>callback(+b.dataset.page)))}
+function renderBoard(data,initial){const all=data.items||[],s=boardState;if(initial){main.innerHTML='<section class="hero"><span class="eyebrow">Make something. Earn something.</span><h1>Find your next bounty<span class="green">.</span></h1><p class="summary">Open challenges. Real rewards.</p></section><section aria-label="Bounty board"><div class="controls"><label class="search"><span>⌕</span><input id="query" type="search" aria-label="Search bounties" placeholder="Search bounties…"></label><label class="sort"><span>Sort by</span><select id="sort"><option value="pot">Biggest pot</option><option value="closing">Closing soon</option><option value="entries">Most entries</option></select></label></div><div class="filter-row"><div class="filters"><button data-filter="all">All</button><button data-filter="soon">Closing soon &lt;24h</button><button data-filter="fee">Entry fee</button><button data-filter="free">No fee</button></div><span id="count" class="muted" aria-live="polite"></span></div><div id="cards" class="grid"></div><div id="pages"></div></section>';const q=document.querySelector('#query');q.value=s.q;document.querySelector('#sort').value=s.sort;let timer;q.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{s.q=q.value;s.page=0;paint()},150)});document.querySelector('#sort').addEventListener('change',ev=>{s.sort=ev.target.value;s.page=0;paint()});main.querySelectorAll('[data-filter]').forEach(b=>b.addEventListener('click',()=>{s.filter=b.dataset.filter;s.page=0;paint()}))}
+ function paint(){const now=Date.now(),list=all.filter(b=>String(b.title).toLowerCase().includes(s.q.toLowerCase())).filter(b=>s.filter==='all'||(s.filter==='fee'?+b.entryFeeUsd>0:s.filter==='free'?!(+b.entryFeeUsd):new Date(b.deadline)>now&&new Date(b.deadline)-now<86400000));list.sort((a,b)=>s.sort==='pot'?+b.potUsd-+a.potUsd:s.sort==='entries'?b.submissionCount-a.submissionCount:new Date(a.deadline)-new Date(b.deadline));s.page=Math.min(s.page,Math.max(0,Math.ceil(list.length/12)-1));update('cards',list.length?cards(list.slice(s.page*12,s.page*12+12)):'<div class="empty"><h2>No bounties match</h2><button id="clear">Clear search</button></div>');document.querySelector('#clear')?.addEventListener('click',()=>{s.q='';s.filter='all';document.querySelector('#query').value='';paint()});document.querySelector('#count').textContent=list.length+' bounties';main.querySelectorAll('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.filter===s.filter)));update('pages',pager(s.page,list.length,12));bindPager(document.querySelector('#pages'),p=>{s.page=p;paint()});stats.innerHTML=`<span><b>${all.filter(b=>new Date(b.deadline)>now).length}</b> open bounties</span><span><b class="money">${money(all.reduce((n,b)=>n+(+b.potUsd||0),0))} USD</b> total pots</span><span><b>${all.reduce((n,b)=>n+(+b.submissionCount||0),0).toLocaleString()}</b> entries</span>`}
+ paint();refreshView=next=>renderBoard(next,false);
 }
-
-window.addEventListener('hashchange', render);
-render();
+function renderRanks(data,initial){let page=0;const entries=data.entries||[],title=data.competition?.title||'Leaderboard';if(initial)main.innerHTML=`<a class="back" href="#/bounty/${E(data.competition?.slug)}">← Bounty overview</a><section class="hero"><span class="eyebrow">The leaderboard</span><h1>${E(title)}</h1><p class="summary">${E(data.phase?.title||'Rankings')} · ${entries.length.toLocaleString()} entries</p></section><section class="panel" id="ranking"></section><div id="pages"></div>`;function paint(){update('ranking',rankTable(entries.slice(page*25,page*25+25),data.rank_key));update('pages',pager(page,entries.length,25));bindPager(document.querySelector('#pages'),n=>{page=n;paint()})}paint();refreshView=next=>{data=next;const body=main.querySelector('tbody');if(body)body.innerHTML=ranks((next.entries||[]).slice(page*25,page*25+25),next.rank_key)} }
+async function route(refresh=false){window.__shotReady=false;const ticket=++sequence;const parts=location.hash.replace(/^#\/?/,'').split('/').filter(Boolean),slug=encodeURIComponent(decodeURIComponent(parts[1]||''));let path='/competitions?status=open&activity=times',type='board';if(parts[0]==='bounty'){path='/competitions/'+slug;type=parts[2]==='leaderboard'?'ranks':'bounty';if(type==='ranks')path+='/leaderboard'}else if(parts[0]==='u'){path='/profiles/'+slug;type='profile'}if(!refresh){refreshView=null;main.innerHTML='<div class="loading" role="status" aria-live="polite">Lighting the way…<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>';stats.hidden=type!=='board'}try{const data=await get(path);if(ticket!==sequence)return;if(refresh&&refreshView)refreshView(data);else if(type==='board')renderBoard(data,true);else if(type==='ranks')renderRanks(data,true);else {const html=type==='bounty'?bountyView(data):profileView(data);if(refresh){const box=document.createElement('main');box.innerHTML=html;patch(main,box)}else main.innerHTML=html;}main.querySelectorAll('.avatar img').forEach(img=>img.addEventListener('error',()=>img.remove()));window.__shotReady=true}catch(err){if(ticket!==sequence)return;main.innerHTML='<section class="error" role="alert"><h1>Could not load this view</h1><button id="retry">Retry</button></section>';document.querySelector('#retry').addEventListener('click',()=>route());window.__shotReady=true}}
+addEventListener('hashchange',()=>route());document.querySelector('#refresh').addEventListener('click',()=>route(true));document.querySelector('#searchLink').onclick=()=>setTimeout(()=>document.querySelector('#query')?.focus(),500);document.querySelector('.skip').onclick=e=>{e.preventDefault();main.focus()};route();
