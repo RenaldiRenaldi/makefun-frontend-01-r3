@@ -1,3 +1,3 @@
 export const money=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-export const date=d=>d?new Date(d).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',timeZoneName:'short'}):'—';
-export function left(d){const delta=new Date(d)-Date.now();if(!Number.isFinite(delta))return ['No deadline','ended'];if(delta<=0)return ['Ended','ended'];const hours=Math.floor(delta/3600000);return [hours>=24?Math.floor(hours/24)+'d '+hours%24+'h left':hours?hours+'h left':Math.max(1,Math.ceil(delta/60000))+'m left',delta<21600000?'soon':''];}
+export const when=iso=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+export function countdown(iso){const ms=new Date(iso)-Date.now();if(!Number.isFinite(ms))return['No deadline','ended'];if(ms<=0)return['Ended','ended'];const h=Math.floor(ms/3600000);if(h>=24)return[Math.floor(h/24)+'d '+(h%24)+'h left',''];if(h>=6)return[h+'h left',''];if(h>=1)return['ends in '+h+'h','soon'];return['ends in '+Math.max(1,Math.ceil(ms/60000))+'m','soon']}
