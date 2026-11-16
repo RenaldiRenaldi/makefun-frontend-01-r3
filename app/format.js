@@ -1,12 +1,5 @@
-export const money = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const when = iso => iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-export function countdown(iso) {
-  const ms = new Date(iso) - Date.now();
-  if (!Number.isFinite(ms)) return ['No deadline', 'ended'];
-  if (ms <= 0) return ['Ended', 'ended'];
-  const h = Math.floor(ms / 3600000);
-  if (h >= 24) return [Math.floor(h / 24) + 'd ' + (h % 24) + 'h left', ''];
-  if (h >= 6) return [h + 'h left', ''];
-  if (h >= 1) return ['ends in ' + h + 'h', 'soon'];
-  return ['ends in ' + Math.max(1, Math.ceil(ms / 60000)) + 'm', 'soon'];
-}
+export const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export const money=v=>'$'+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+export const date=v=>v?new Date(v).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+export const link=(kind,value)=>'#/'+kind+'/'+encodeURIComponent(value||'');
+export function left(v){const m=new Date(v)-Date.now();if(!Number.isFinite(m)||m<=0)return['Ended','ended'];const h=Math.floor(m/36e5),d=Math.floor(h/24);return[d?d+'d '+h%24+'h':h+'h '+Math.floor(m/6e4)%60+'m',''+(m<216e5?'soon':'open')]}

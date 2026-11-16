@@ -1,18 +1,14 @@
-const store = new Map();
-const base = 'https://make.fun/api';
-
-export async function get(path) {
-  const url = base + path;
-  let hit = store.get(url);
-  if (!hit) {
-    try { hit = JSON.parse(sessionStorage.getItem(url)); } catch { hit = null; }
-  }
-  const res = await fetch(url, { headers: hit?.etag ? { 'If-None-Match': hit.etag } : {} });
-  if (res.status === 304 && hit) return hit.data;
-  if (!res.ok) throw new Error('make.fun answered ' + res.status);
-  const data = await res.json();
-  const entry = { data, etag: res.headers.get('ETag') };
-  store.set(url, entry);
-  try { sessionStorage.setItem(url, JSON.stringify(entry)); } catch {}
+const cache=new Map();
+export async function get(path){
+  const url='https://make.fun/api'+path;
+  let saved=cache.get(url);
+  if(!saved)try{saved=JSON.parse(sessionStorage.getItem(url))}catch{}
+  if(saved&&Date.now()-saved.time<60000)return saved.data;
+  const response=await fetch(url,{cache:'no-store',headers:saved?.etag?{'If-None-Match':saved.etag}:{}});
+  if(response.status===304&&saved){saved.time=Date.now();cache.set(url,saved);return saved.data}
+  if(!response.ok)throw Error('API '+response.status);
+  const data=await response.json(),entry={data,etag:response.headers.get('ETag'),time:Date.now()};
+  cache.set(url,entry);
+  try{sessionStorage.setItem(url,JSON.stringify(entry))}catch{}
   return data;
 }
