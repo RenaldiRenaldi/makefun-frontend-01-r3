@@ -1,14 +1,61 @@
-import {money,when,countdown} from './format.js';
-export const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const E=escape;
-export const link=(path,text,cls='')=>`<a${cls?` class="${cls}"`:''} href="#/${path}">${E(text)}</a>`;
-const prose=v=>typeof v==='string'?v:JSON.stringify(v??'',null,2);
-export const feeChip=usd=>Number(usd)>0?`<span class="chip fee">${money(usd)} fee</span>`:'<span class="chip green">Free</span>';
-export function clock(iso){const[text,tone]=countdown(iso);return `<span class="chip ${tone}">${E(text)}</span>`}
-export function cards(items){return items.map(b=>{const fees=Number(b.entryFeesUsd)>0,slug=encodeURIComponent(b.slug||'');return `<article class="card"><div><span class="eyebrow">${E(b.category||'Bounty')} · ${E(b.sponsor?.name||'Community')}</span><h2><a href="#/bounty/${slug}">${E(b.title)}</a></h2></div><div class="card-pot money">${money(b.potUsd)}<small>${fees?'+'+money(b.entryFeesUsd)+' fees':'live pot'}</small></div><div class="card-foot">${feeChip(b.entryFeeUsd)}${clock(b.deadline)}<span class="muted">${Number(b.submissionCount||0).toLocaleString()} entries</span></div></article>`}).join('')}
-export function pager(page,total,size){const pages=Math.max(1,Math.ceil(total/size));return `<div class="pager"><button data-page="${page-1}" ${page<=0?'disabled':''}>← Previous</button><span>Page ${page+1} of ${pages}</span><button data-page="${page+1}" ${page+1>=pages?'disabled':''}>Next →</button></div>`}
-const medals=['🥇','🥈','🥉'];
-export function ranks(rows,key){return rows.map(r=>{const raw=r.values?.[key];return `<tr><td>${medals[r.rank-1]||E(r.rank??'—')}</td><td>${link('u/'+encodeURIComponent(r.handle||''),'@'+(r.handle||''))}</td><td>${E(r.title)}</td><td class="numeric">${raw!=null?(Number(raw)/10000).toFixed(2)+'%':'—'}</td><td class="money">${r.prize!=null?money(r.prize):'—'}</td></tr>`}).join('')}
-export const rankTable=(rows,key)=>rows.length?`<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Builder</th><th>Entry</th><th>Judge rate</th><th>Prize</th></tr></thead><tbody>${ranks(rows,key)}</tbody></table></div>`:'<p class="empty">No ranked entries yet — grading starts after the deadline.</p>';
-export function bountyView(b){const ended=new Date(b.deadline)<=Date.now(),slug=encodeURIComponent(b.slug||'');const preview=(b.submissions||[]).filter(s=>s.score!=null).sort((x,y)=>y.score-x.score).slice(0,5).map((s,i)=>({rank:i+1,handle:s.hunter,title:s.title,values:{score:s.score}}));return `<a class="back" href="#/">← All bounties</a><section class="hero"><span class="eyebrow">${E(b.category||'Competition')} / ${E(b.sponsor?.name||'Community')}</span><h1>${E(b.title)}</h1><div class="hero-meta"><span class="chip ${ended?'soon':'green'}">${ended?'Ended':'Open'}</span>${clock(b.deadline)}<span class="muted">${Number(b.submissionCount||0).toLocaleString()} entries</span></div><p class="summary">${E(b.summary||'')}</p></section><div class="detail-grid"><div class="brief"><section class="panel"><h2>The brief</h2><div class="prose">${E(prose(b.description||b.summary))}</div><details><summary>Read the rules</summary><div class="prose">${E(prose(b.rules)||'Follow the brief.')}</div></details></section><section class="panel preview"><div class="section-title"><h2>Leaderboard preview</h2>${link('bounty/'+slug+'/leaderboard','Full leaderboard →')}</div>${rankTable(preview,'score')}<p class="muted">Provisional scores.</p></section></div><aside class="panel reward"><div class="big-pot money">${money(b.potUsd)} <small>USD</small></div><p class="muted">includes ${money(b.entryFeesUsd)} USD in entry fees from ${Number(b.entryFeePayers||0)} payers</p><h2>Prize breakdown</h2><table><thead><tr><th>Place</th><th>USD</th></tr></thead><tbody>${(b.rewardsNow||[]).map(r=>`<tr><td>${E(r.place)}</td><td class="money">${money(r.amountUsd)}</td></tr>`).join('')}</tbody></table><dl><dt>Entry fee</dt><dd>${feeChip(b.entryFeeUsd)}</dd><dt>Opens</dt><dd>${when(b.opensAt)}</dd><dt>Deadline</dt><dd>${when(b.deadline)}</dd><dt>Entries</dt><dd>${Number(b.submissionCount||0).toLocaleString()}</dd></dl></aside></div>`}
-export function profileView(p){const rec=p.record||{},handle=p.handle||'',name=p.display_name||handle,source=p.avatar||p.image;let avatar='';try{const u=new URL(source||'','https://make.fun');if(source&&u.origin==='https://make.fun')avatar=`<img crossorigin="anonymous" src="${E(u.href)}" alt="${E(name)}" width="72" height="72">`}catch{}const stats=[['Entered',rec.competitions_entered],['Placed',rec.competitions_placed],['Won',rec.competitions_won],['Podiums',rec.podium_finishes],['Best place',rec.best_placement],['Prize money',money(rec.prize_usd)+' USD']];const links=[p.github_login?'GitHub · '+E(p.github_login):'',p.discord?'Discord · '+E(p.discord):'',p.wallet?'Wallet · '+E(p.wallet):''].filter(Boolean);return `<a class="back" href="#/">← Board</a><section class="hero"><div class="person"><div class="avatar"><span>${E(name.slice(0,2).toUpperCase())}</span>${avatar}</div><div><h1>${E(name)}</h1><span class="muted">@${E(handle)}</span></div></div><p class="summary">${E(p.bio||'')}</p>${links.length?`<p class="muted">${links.join(' · ')}</p>`:''}</section><div class="record">${stats.map(([label,value],i)=>`<div class="panel"><b class="${i===5?'money':''}">${E(value??'—')}</b><span class="muted">${label}</span></div>`).join('')}</div><section class="panel"><h2>Solutions</h2><div class="table-scroll"><table><thead><tr><th>Entry</th><th>Bounty</th><th>Status</th><th>Deadline</th></tr></thead><tbody>${(p.solutions||[]).map(s=>`<tr><td>${E(s.title)}</td><td>${link('bounty/'+encodeURIComponent(s.competition?.slug||''),s.competition?.title||'Competition')}</td><td>${E(s.competition?.status||'—')}</td><td>${when(s.competition?.deadline)}</td></tr>`).join('')}</tbody></table></div>${p.solutions?.length?'':'<p class="muted">No solutions yet.</p>'}</section>${p.payouts?.length?`<section class="panel"><h2>Payouts</h2><div class="prose">${E(prose(p.payouts))}</div></section>`:''}`}
+import { money, when, countdown } from './format.js';
+
+export const escape = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const E = escape;
+
+export const link = (path, text, cls = '') => `<a${cls ? ` class="${cls}"` : ''} href="#/${path}">${E(text)}</a>`;
+
+const prose = v => typeof v === 'string' ? v : JSON.stringify(v ?? '', null, 2);
+
+export const feeChip = usd => Number(usd) > 0 ? `<span class="chip fee">${money(usd)} fee</span>` : '<span class="chip green">Free</span>';
+
+export function clock(iso) {
+  const [text, tone] = countdown(iso);
+  return `<span class="chip ${tone}">${E(text)}</span>`;
+}
+
+export function cards(items) {
+  return items.map(b => {
+    const fees = Number(b.entryFeesUsd) > 0;
+    const slug = encodeURIComponent(b.slug || '');
+    return `<article class="card"><div><span class="eyebrow">${E(b.category || 'Bounty')} · ${E(b.sponsor?.name || 'Community')}</span><h2><a href="#/bounty/${slug}">${E(b.title)}</a></h2></div><div class="card-pot money">${money(b.potUsd)}<small>${fees ? '+' + money(b.entryFeesUsd) + ' fees' : 'live pot'}</small></div><div class="card-foot">${feeChip(b.entryFeeUsd)}${clock(b.deadline)}<span class="muted">${Number(b.submissionCount || 0).toLocaleString()} entries</span></div></article>`;
+  }).join('');
+}
+
+export function pager(page, total, size) {
+  const pages = Math.max(1, Math.ceil(total / size));
+  return `<div class="pager"><button data-page="${page - 1}" ${page <= 0 ? 'disabled' : ''}>← Previous</button><span>Page ${page + 1} of ${pages}</span><button data-page="${page + 1}" ${page + 1 >= pages ? 'disabled' : ''}>Next →</button></div>`;
+}
+
+const medals = ['🥇', '🥈', '🥉'];
+
+export function ranks(rows, key) {
+  return rows.map(r => {
+    const raw = r.values?.[key];
+    return `<tr><td>${medals[r.rank - 1] || E(r.rank ?? '—')}</td><td>${link('u/' + encodeURIComponent(r.handle || ''), '@' + (r.handle || ''))}</td><td>${E(r.title)}</td><td class="numeric">${raw != null ? (Number(raw) / 10000).toFixed(2) + '%' : '—'}</td><td class="money">${r.prize != null ? money(r.prize) : '—'}</td></tr>`;
+  }).join('');
+}
+
+export const rankTable = (rows, key) => rows.length ? `<div class="table-scroll"><table><thead><tr><th>Rank</th><th>Builder</th><th>Entry</th><th>Judge rate</th><th>Prize</th></tr></thead><tbody>${ranks(rows, key)}</tbody></table></div>` : '<p class="empty">No ranked entries yet — grading starts after the deadline.</p>';
+
+export function bountyView(b) {
+  const ended = new Date(b.deadline) <= Date.now();
+  const slug = encodeURIComponent(b.slug || '');
+  const preview = (b.submissions || []).filter(s => s.score != null).sort((x, y) => y.score - x.score).slice(0, 5).map((s, i) => ({ rank: i + 1, handle: s.hunter, title: s.title, values: { score: s.score } }));
+  return `<a class="back" href="#/">← All bounties</a><section class="hero"><span class="eyebrow">${E(b.category || 'Competition')} / ${E(b.sponsor?.name || 'Community')}</span><h1>${E(b.title)}</h1><div class="hero-meta"><span class="chip ${ended ? 'soon' : 'green'}">${ended ? 'Ended' : 'Open'}</span>${clock(b.deadline)}<span class="muted">${Number(b.submissionCount || 0).toLocaleString()} entries</span></div><p class="summary">${E(b.summary || '')}</p></section><div class="detail-grid"><div class="brief"><section class="panel"><h2>The brief</h2><div class="prose">${E(prose(b.description || b.summary))}</div><details><summary>Read the rules</summary><div class="prose">${E(prose(b.rules) || 'Follow the brief.')}</div></details></section><section class="panel preview"><div class="section-title"><h2>Leaderboard preview</h2>${link('bounty/' + slug + '/leaderboard', 'Full leaderboard →')}</div>${rankTable(preview, 'score')}<p class="muted">Provisional scores.</p></section></div><aside class="panel reward"><div class="big-pot money">${money(b.potUsd)} <small>USD</small></div><p class="muted">includes ${money(b.entryFeesUsd)} USD in entry fees from ${Number(b.entryFeePayers || 0)} payers</p><h2>Prize breakdown</h2><table><thead><tr><th>Place</th><th>USD</th></tr></thead><tbody>${(b.rewardsNow || []).map(r => `<tr><td>${E(r.place)}</td><td class="money">${money(r.amountUsd)}</td></tr>`).join('')}</tbody></table><dl><dt>Entry fee</dt><dd>${feeChip(b.entryFeeUsd)}</dd><dt>Opens</dt><dd>${when(b.opensAt)}</dd><dt>Deadline</dt><dd>${when(b.deadline)}</dd><dt>Entries</dt><dd>${Number(b.submissionCount || 0).toLocaleString()}</dd></dl></aside></div>`;
+}
+
+export function profileView(p) {
+  const rec = p.record || {};
+  const handle = p.handle || '';
+  const name = p.display_name || handle;
+  const source = p.avatar || p.image;
+  let avatar = '';
+  try {
+    const u = new URL(source || '', 'https://make.fun');
+    if (source && u.origin === 'https://make.fun') avatar = `<img crossorigin="anonymous" src="${E(u.href)}" alt="${E(name)}" width="72" height="72">`;
+  } catch {}
+  const stats = [['Entered', rec.competitions_entered], ['Placed', rec.competitions_placed], ['Won', rec.competitions_won], ['Podiums', rec.podium_finishes], ['Best place', rec.best_placement], ['Prize money', money(rec.prize_usd) + ' USD']];
+  const links = [p.github_login ? 'GitHub · ' + E(p.github_login) : '', p.discord ? 'Discord · ' + E(p.discord) : '', p.wallet ? 'Wallet · ' + E(p.wallet) : ''].filter(Boolean);
+  return `<a class="back" href="#/">← Board</a><section class="hero"><div class="person"><div class="avatar"><span>${E(name.slice(0, 2).toUpperCase())}</span>${avatar}</div><div><h1>${E(name)}</h1><span class="muted">@${E(handle)}</span></div></div><p class="summary">${E(p.bio || '')}</p>${links.length ? `<p class="muted">${links.join(' · ')}</p>` : ''}</section><div class="record">${stats.map(([label, value], i) => `<div class="panel"><b class="${i === 5 ? 'money' : ''}">${E(value ?? '—')}</b><span class="muted">${label}</span></div>`).join('')}</div><section class="panel"><h2>Solutions</h2><div class="table-scroll"><table><thead><tr><th>Entry</th><th>Bounty</th><th>Status</th><th>Deadline</th></tr></thead><tbody>${(p.solutions || []).map(s => `<tr><td>${E(s.title)}</td><td>${link('bounty/' + encodeURIComponent(s.competition?.slug || ''), s.competition?.title || 'Competition')}</td><td>${E(s.competition?.status || '—')}</td><td>${when(s.competition?.deadline)}</td></tr>`).join('')}</tbody></table></div>${p.solutions?.length ? '' : '<p class="muted">No solutions yet.</p>'}</section>${p.payouts?.length ? `<section class="panel"><h2>Payouts</h2><div class="prose">${E(prose(p.payouts))}</div></section>` : ''}`;
+}
